@@ -4,20 +4,24 @@ on:
     branches:
       - main
 
-env:
+#env:
   # TF_CLOUD_ORGANIZATION: "${{ secrets.TF_CLOUD_ORGANIZATION }}"
   # TF_API_TOKEN: "${{ secrets.TF_API_TOKEN }}"
   # TF_WORKSPACE: "${{ secrets.TF_WORKSPACE }}"
   # CONFIG_DIRECTORY: "./infra/"
-  REPO_NAME: ${GITHUB_REPOSITORY#$GITHUB_REPOSITORY_OWNER/}
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - name: Set ENV variables
+        run: |
+          echo "REPO_NAME=${GITHUB_REPOSITORY#$GITHUB_REPOSITORY_OWNER/}" >> $GITHUB_ENV
+      
       - name: Use the custom ENV variable
         run: |
           echo $REPO_NAME
+
   # build-image:
   #   name: Build Docker image
   #   runs-on: ubuntu-latest
