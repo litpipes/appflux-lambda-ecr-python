@@ -1,4 +1,4 @@
-name: Push the Docker image to AWS ECR Repo
+name: Deploy terraform to prod
 on:
   push:
     branches:
@@ -7,7 +7,7 @@ on:
 env:
   TF_CLOUD_ORGANIZATION: "${{ vars.TF_CLOUD_ORGANIZATION }}"
   TF_API_TOKEN: "${{ secrets.TF_API_TOKEN }}"
-  TF_WORKSPACE: "${{ vars.TF_WORKSPACE }}"
+  TF_WORKSPACE: "${{ vars.TF_WORKSPACE_PROD }}"
   CONFIG_DIRECTORY: "./infra/"
 
 jobs:
@@ -22,73 +22,35 @@ jobs:
         run: |
           echo "repo_name=${GITHUB_REPOSITORY#$GITHUB_REPOSITORY_OWNER/}" >> $GITHUB_OUTPUT
 
-  unit-tests:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - uses: actions/setup-python@v5
-        with:
-          python-version: 3.12
-
-      - name: Run image
-        uses: abatilo/actions-poetry@v3
-        with:
-          poetry-version: 2.0.0
-      - name: View poetry --help
-        run: |
-          poetry install --no-cache --no-root
-          poetry run pytest
         
-  build-image:
-    name: Build Docker image
+  get-image:
+    name: Get Docker image
     runs-on: ubuntu-latest
-    needs: [set-vars, unit-tests]
+    needs: [set-vars]
     permissions:
       contents: read
       id-token: write
     outputs:
-      ecr_image_tag: ${{ steps.build-image.outputs.ecr_image_tag }}
+      ecr_image_tag: ${{ steps.get-image-tag.outputs.ecr_image_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          role-to-assume: "${{ secrets.AWS_ROLE }}"
-          output-credentials: true
-          aws-region: us-east-1
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
       - name: Get commit hash
         id: get-commit-hash
         run: echo "::set-output name=commit-hash::$(git rev-parse --short HEAD)"
-      - name: Get timestamp
-        id: get-timestamp
-        run: echo "::set-output name=timestamp::$(date +'%Y-%m-%d-%H-%M')"
 
-      - name: Build, tag, and push the image to Amazon ECR
+      - name: get tag
         if: ${{ vars.ECR_REPOSITORY != null }}
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ needs.set-vars.outputs.repo_name }}
-          IMAGE_TAG: ${{ steps.get-commit-hash.outputs.commit-hash }}-${{ steps.get-timestamp.outputs.timestamp }}
+        id: get-image-tag
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo ecr_image_tag=$IMAGE_TAG >> $GITHUB_OUTPUT
           echo $IMAGE_TAG
 
   terraform-plan:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
-    needs: [build-image, set-vars]
+    needs: [get-image, set-vars]
     permissions:
       contents: read
       pull-requests: write
@@ -112,7 +74,7 @@ jobs:
           configuration_version: ${{ steps.plan-upload.outputs.configuration_version_id }}
           plan_only: true
         env: 
-          TF_VAR_ecr_image_tag: '"${{ needs.build-image.outputs.ecr_image_tag }}"'
+          TF_VAR_ecr_image_tag: '"${{ needs.get-image.outputs.ecr_image_tag }}"'
           TF_VAR_ecr_image_repository: '"${{ needs.set-vars.outputs.repo_name }}"'
 
       - name: Get Plan Output
@@ -126,7 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [build-image, terraform-plan, set-vars]
+    needs: [get-image, terraform-plan, set-vars]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -145,7 +107,7 @@ jobs:
           workspace: ${{ env.TF_WORKSPACE }}
           configuration_version: ${{ steps.apply-upload.outputs.configuration_version_id }}
         env: 
-          TF_VAR_ecr_image_tag: '"${{ needs.build-image.outputs.ecr_image_tag }}"'
+          TF_VAR_ecr_image_tag: '"${{ needs.get-image.outputs.ecr_image_tag }}"'
           TF_VAR_ecr_image_repository: '"${{ needs.set-vars.outputs.repo_name }}"'
 
       - name: Apply
