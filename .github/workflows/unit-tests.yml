@@ -1,4 +1,4 @@
-name: Push the Docker image to AWS ECR Repo and deploy terraform to dev
+name: Unit tests
 on:
   push:
     branches:
