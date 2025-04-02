@@ -9,7 +9,6 @@ env:
   TF_API_TOKEN: "${{ secrets.TF_API_TOKEN }}"
   TF_WORKSPACE: "${{ vars.TF_WORKSPACE}}-dev"
   CONFIG_DIRECTORY: "./infra/"
-  INVENTORY_DIRECTORY: "./infra/inventories/dev"
 
 jobs:
   set-vars:
@@ -40,7 +39,7 @@ jobs:
       - name: View poetry --help
         run: |
           poetry install --no-cache --no-root
-          poetry run pytest
+          PYTHONPATH=src poetry run pytest
         
   build-image:
     name: Build Docker image
@@ -51,6 +50,7 @@ jobs:
       id-token: write
     outputs:
       ecr_image_tag: ${{ steps.build-image.outputs.ecr_image_tag }}
+      ecr_image_uri: ${{ steps.build-image.outputs.ecr_image_uri }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -81,7 +81,7 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo ecr_image_tag=$IMAGE_TAG >> $GITHUB_OUTPUT
-          echo $IMAGE_TAG
+          echo ecr_image_uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG >> $GITHUB_OUTPUT
 
   terraform-plan:
     name: "Terraform Plan"
@@ -93,10 +93,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Move invertory to infra directory
-        run: |
-          mv ${{ env.INVENTORY_DIRECTORY }}/terraform.tfvars ${{ env.CONFIG_DIRECTORY }}/terraform.auto.tfvars
 
       - name: Upload Configuration
         uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
@@ -114,8 +110,8 @@ jobs:
           configuration_version: ${{ steps.plan-upload.outputs.configuration_version_id }}
           plan_only: true
         env: 
+          TF_VAR_ecr_image_uri: '"${{ needs.build-image.outputs.ecr_image_uri }}"'
           TF_VAR_ecr_image_tag: '"${{ needs.build-image.outputs.ecr_image_tag }}"'
-          TF_VAR_ecr_image_repository: '"${{ needs.set-vars.outputs.repo_name }}"'
 
       - name: Get Plan Output
         uses: hashicorp/tfc-workflows-github/actions/plan-output@v1.0.0
@@ -148,7 +144,7 @@ jobs:
           configuration_version: ${{ steps.apply-upload.outputs.configuration_version_id }}
         env: 
           TF_VAR_ecr_image_tag: '"${{ needs.build-image.outputs.ecr_image_tag }}"'
-          TF_VAR_ecr_image_repository: '"${{ needs.set-vars.outputs.repo_name }}"'
+          TF_VAR_ecr_image_uri: '"${{ needs.build-image.outputs.ecr_image_uri }}"'
 
       - name: Apply
         uses: hashicorp/tfc-workflows-github/actions/apply-run@v1.0.0

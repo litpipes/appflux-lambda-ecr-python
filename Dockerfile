@@ -27,14 +27,14 @@ ENV PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
-COPY ./src/app ${LAMBDA_TASK_ROOT}
+COPY ./src/app ${LAMBDA_TASK_ROOT}/app
 
-COPY ./pyproject.toml ${LAMBDA_TASK_ROOT}
-COPY ./README.md ${LAMBDA_TASK_ROOT}
+COPY pyproject.toml README.md ./
+ENV PYTHONPATH=${LAMBDA_TASK_ROOT}
 
 WORKDIR ${LAMBDA_TASK_ROOT}
 
 RUN poetry config virtualenvs.create false
 RUN poetry install --without test --no-root
 
-CMD [ "main.handler" ]
+CMD [ "app.main.handler" ]

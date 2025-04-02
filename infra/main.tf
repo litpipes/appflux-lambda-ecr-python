@@ -12,10 +12,6 @@ provider "aws" {
   region = "us-east-1"
 }
 
-data "aws_ecr_repository" "ecr_image" {
-  name = var.ecr_image_repository
-}
-
 resource "aws_iam_role" "lambda_role" {
   name = "${var.lambda_function_name}-role"
 
@@ -55,7 +51,7 @@ resource "aws_lambda_function" "docker_lambda" {
   function_name = var.lambda_function_name
   role          = aws_iam_role.lambda_role.arn
   package_type  = "Image"
-  image_uri     = "${data.aws_ecr_repository.ecr_image.repository_url}:${var.ecr_image_tag}"
+  image_uri     = "${var.ecr_image_uri}"
 
   timeout     = 60
   memory_size = 256

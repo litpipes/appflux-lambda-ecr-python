@@ -8,7 +8,7 @@ variable "ecr_image_tag" {
  type = string
 }
 
-variable "ecr_image_repository" {
+variable "ecr_image_uri" {
  type = string
 }
 

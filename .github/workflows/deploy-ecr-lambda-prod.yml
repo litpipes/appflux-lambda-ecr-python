@@ -9,7 +9,7 @@ env:
   TF_API_TOKEN: "${{ secrets.TF_API_TOKEN }}"
   TF_WORKSPACE: "${{ vars.TF_WORKSPACE}}-prod"
   CONFIG_DIRECTORY: "./infra/"
-  INVENTORY_DIRECTORY: "./infra/inventories/prod"
+
 jobs:
   set-vars:
     outputs:
@@ -32,17 +32,20 @@ jobs:
       id-token: write
     outputs:
       ecr_image_tag: ${{ steps.get-image-tag.outputs.ecr_image_tag }}
+      ecr_image_uri: ${{ steps.get-image-tag.outputs.ecr_image_uri }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Get commit hash
+      - name: Get commit hash from develop merged into main
         id: get-commit-hash
-        run: echo "::set-output name=commit-hash::$(git rev-parse --short HEAD)"
+        run: echo "::set-output name=commit-hash::$(git merge-base origin/main origin/develop)"
 
-      - name: get tag
+      - name: Get Tag
         if: ${{ vars.ECR_REPOSITORY != null }}
         id: get-image-tag
+        env:
+          IMAGE_TAG: ${{ steps.get-commit-hash.outputs.commit-hash }}
         run: |
           echo ecr_image_tag=$IMAGE_TAG >> $GITHUB_OUTPUT
           echo $IMAGE_TAG
@@ -57,10 +60,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Move invertory to infra directory
-        run: |
-          mv ${{ env.INVENTORY_DIRECTORY }}/terraform.tfvars ${{ env.CONFIG_DIRECTORY }}/terraform.auto.tfvars
 
       - name: Upload Configuration
         uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
@@ -96,10 +95,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Move invertory to infra directory
-        run: |
-          mv ${{ env.INVENTORY_DIRECTORY }}/terraform.tfvars ${{ env.CONFIG_DIRECTORY }}/terraform.auto.tfvars
 
       - name: Upload Configuration
         uses: hashicorp/tfc-workflows-github/actions/upload-configuration@v1.0.0
